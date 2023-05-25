@@ -7,7 +7,7 @@ from PIL import ImageFilter, ImageEnhance, Image as im
 import math
 
 # Libraries used 
-from flask import Flask, flash, redirect, render_template, request, session
+from flask import Flask, flash, redirect, render_template, request, session, send_from_directory, current_app, send_file
 from flask_session import Session
 from tempfile import mkdtemp
 from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
@@ -41,7 +41,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Specifies the location to save files
-UPLOAD_FOLDER = r"C:\Users\karee\OneDrive - Imperial College London\Documents\Stuff\Icon project\Adaptive-icons\static"
+UPLOAD_FOLDER = "static_images"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Make sure API key is set
@@ -51,7 +51,7 @@ if not os.environ.get("API_KEY"):
 
 
 @app.route("/", methods=["GET", "POST"])
-def index(): 
+def index():
     def allowed_file(filename):
         allowedExtensions = {'png', 'jpg', 'jpeg'}
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowedExtensions
@@ -66,8 +66,8 @@ def index():
         
         #name = str(icon.filename).rsplit('.', 1)[0] + ".jpg"
         name = str(icon.filename)
-        icon.save(os.path.join(app.config['UPLOAD_FOLDER'], name))
-        img = cv2.imread(app.config['UPLOAD_FOLDER'] + "\\" + name)
+        icon.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
+        img = cv2.imread(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
         mask = np.zeros(img.shape[:2],np.uint8)
      
         bgdModel = np.zeros((1,65),np.float64)
@@ -75,7 +75,7 @@ def index():
         # Gets dimensions of image
         h, w, c = img.shape
 
-        image = im.open(os.path.join(app.config['UPLOAD_FOLDER'], name))
+        image = im.open(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
         image = image.convert('RGB').filter(ImageFilter.FIND_EDGES)
         imageArray = np.array(image)
         top = h
@@ -104,7 +104,7 @@ def index():
                    imageArray[i][j] = np.array([255, 0, 0]) 
         imageArray[(top)][left] = np.array([0, 0, 255])
         imageArray[(bottom)][right] = np.array([0, 255, 0])
-        im.fromarray(imageArray).save(os.path.join(app.config['UPLOAD_FOLDER'], "edges.png"))
+        im.fromarray(imageArray).save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edges.png"))
         rect = (left, top, (right - left), (bottom - top))
         cv2.grabCut(img,mask,rect,bgdModel,fgdModel,15,cv2.GC_INIT_WITH_RECT)
 
@@ -127,14 +127,27 @@ def index():
                     foreground[i][j] = fColourArray
 
         data = im.fromarray(foreground)
-        data.save(os.path.join(app.config['UPLOAD_FOLDER'], 'foreground.png'))
+        data.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "foreground.png"))
         data = im.fromarray(background)
-        data.save(os.path.join(app.config['UPLOAD_FOLDER'], 'background.png'))
+        data.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "background.png"))
         combinedImage = np.add(foreground, background)
         data = im.fromarray(combinedImage)
-        data.save(os.path.join(app.config['UPLOAD_FOLDER'], 'combined.png'))
+        data.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "combined.png"))
+
+        uploads = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'])
+        prefix = name.rsplit('.', 1)[0]
+        suffix = name.rsplit('.', 1)[1]
+        # Returning file from appended path
+        return send_from_directory(directory=uploads, path="combined.png", as_attachment=True, download_name = prefix + "_themed." + suffix)
 
         flash("Icon saved")
         return redirect("/")
 
     return render_template("index.html")
+
+
+
+""" uploads = os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'])
+# Returning file from appended path
+return send_from_directory(directory=uploads, filename="combined.png") """
+
