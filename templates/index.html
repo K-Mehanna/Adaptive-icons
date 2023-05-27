@@ -6,21 +6,20 @@
 
 {% block main %}
     <h1>New Icon</h1><br>
-    <h4 style="color: #00719b;">Upload icon:</h4><br>
 
     <form action="/" method="post" enctype="multipart/form-data">
         <div class="form-row">
             <div class="form-group col-md-12">
-                <input type="file" class="form-control-file" name="icon" id="imageInput">
+                <label for="inputType">Please select the type of icon you would like to create: </label>
+                <select id="inputType" class="form-control" name="type">
+                    <option selected>Please select...</option>
+                    <option>Background only</option>
+                    <option>Background and foreground (beta)</option>
+                </select>
             </div>
         </div>
-        <label for="bColour">New background colour:</label>
-        <input type="color" id="bColour" name="bColour" value="#000000"><br>
-        <label for="fColour">New foreground colour:</label>
-        <input type="color" id="fColour" name="fColour" value="#000000">
-        <br>
-            
-        <button type="submit" class="btn btn-success">Submit</button>
+
+        <button type="submit" class="btn btn-primary">Submit</button>
     </form>
 
 {% endblock %}
