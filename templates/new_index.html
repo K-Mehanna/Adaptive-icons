@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Themed icon generator
+{% endblock %}
+
+{% block main %}
+    <h1>New Icon</h1><br>
+    <h4 style="color: #00719b;">Upload icon and select type of return icon:</h4><br>
+
+    <form action="/" method="post" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group col-md-12">
+                <input type="file" class="form-control-file" name="icon" id="imageInput">
+            </div>
+        </div>
+        <br>
+        <div>
+            <span>Background only:</span>
+            <button type="submit" class="btn btn-success" name="action" value="background">Download</button>
+        </div>
+        <div>
+            <label for="fg">Foreground and background:</label>
+            <button type="submit" id="fg" class="btn btn-success" name="action" value="foreground">Download</button>
+        </div>
+        
+    </form>
+
+{% endblock %}

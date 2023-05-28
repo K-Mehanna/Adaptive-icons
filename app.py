@@ -52,21 +52,18 @@ if not os.environ.get("API_KEY"):
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        print("fdasfsda")
-        inputType = request.form.get("type")
-        if inputType == "Background only":
+        inputType = request.form["action"]
+        if inputType == "background":
             return redirect("/background")
-        else:
+        elif inputType == "foreground":
             return redirect("/foreground")
+        else:
+            return redirect("/")
     else:
-        return render_template("index.html")
+        return render_template("new_index.html")
 
 @app.route("/background", methods=["GET", "POST"])
 def background():
-    def allowed_file(filename):
-        allowedExtensions = {'png', 'jpg', 'jpeg'}
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowedExtensions
-    
     if request.method == "POST":
         # Variable containing the icon
         icon = request.files["icon"]
@@ -74,63 +71,13 @@ def background():
             return apology("must include image")
         elif not allowed_file(icon.filename):
             return apology("must be a png, jpg or jpeg")
-        
-        name = str(icon.filename)
-        icon.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        img = cv2.imread(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        mask = np.zeros(img.shape[:2],np.uint8)
-    
-        bgdModel = np.zeros((1,65),np.float64)
-        fgdModel = np.zeros((1,65),np.float64)
-        # Gets dimensions of image
-        h, w, c = img.shape
-
-        image = im.open(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        image = image.convert('RGB').filter(ImageFilter.FIND_EDGES)
-        imageArray = np.array(image)
-        top = h
-        bottom = -1
-        left = w
-        right = -1
-        for i in range(3, h - 2):
-            for j in range(3, w - 2):
-                if np.sum(imageArray[i][j]) > 200:
-                    if i < top:
-                        top = i
-                    if i > bottom:
-                        bottom = i
-                    if j < left:
-                        left = j
-                    if j > right:
-                        right = j
-        top = max(1, top - 3)
-        left = max(1, left - 3)
-        bottom = min(h - 1, bottom + 3)
-        right = min(w - 1, right + 3)
-        # Visual for the inclusion rectangle
-        for i in range(1, h):
-            for j in range(1, w):
-                if (((top) == i or i == bottom) and ((left) <= j and j <= right)) or (((left) == j or right == j) and ((top) <= i and i <= bottom)):
-                   imageArray[i][j] = np.array([255, 0, 0]) 
-        imageArray[(top)][left] = np.array([0, 0, 255])
-        imageArray[(bottom)][right] = np.array([0, 255, 0])
-        im.fromarray(imageArray).save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edges.png"))
-        rect = (left, top, (right - left), (bottom - top))
-        cv2.grabCut(img,mask,rect,bgdModel,fgdModel,10,cv2.GC_INIT_WITH_RECT)
+        mask, img, h, w, name, bgdModel, fgdModel = admin(icon)
 
         mask2 = np.where((mask==2)|(mask==0),0,1).astype('uint8')
         foreground = img*mask2[:,:,np.newaxis]
-
-        #image = im.open(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        #image = image.convert('RGB').filter(ImageFilter.FIND_EDGES)
-        #image.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edges.png"))
-
-         # Use outline to generate mask
-        # edge = cv2.imread(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edges.png"), cv2.IMREAD_GRAYSCALE)
         
         # Applying the Canny Edge filter
-        edge = cv2.Canny(img, 0, 300)
+        edge = cv2.Canny(img, 0, 300) # type: ignore
 
         cv2.imwrite(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edge.png"), edge)
 
@@ -150,9 +97,9 @@ def background():
         # whereever it is marked white (sure foreground), change mask=1
         # whereever it is marked black (sure background), change mask=0
         mask[np.array_equal(result, np.zeros(3))] = 0
-        mask[np.array_equal(result, [255,255,255])] = 0
+        mask[np.array_equal(result, [255,255,255])] = 1
         
-        cv2.grabCut(img,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
+        cv2.grabCut(img,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK) 
         
         bColour = str(request.form.get("bColour"))
         bColourArray = np.array([int(bColour[1:3], 16), int(bColour[3:5], 16), int(bColour[5:7], 16)])
@@ -192,10 +139,6 @@ def background():
 
 @app.route("/foreground", methods=["GET", "POST"])
 def foreground():
-    def allowed_file(filename):
-        allowedExtensions = {'png', 'jpg', 'jpeg'}
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowedExtensions
-    
     if request.method == "POST":
         # Variable containing the icon
         icon = request.files["icon"]
@@ -204,50 +147,7 @@ def foreground():
         elif not allowed_file(icon.filename):
             return apology("must be a png, jpg or jpeg")
         
-        #name = str(icon.filename).rsplit('.', 1)[0] + ".jpg"
-        name = str(icon.filename)
-        icon.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        img = cv2.imread(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        mask = np.zeros(img.shape[:2],np.uint8)
-     
-        bgdModel = np.zeros((1,65),np.float64)
-        fgdModel = np.zeros((1,65),np.float64)
-        # Gets dimensions of image
-        h, w, c = img.shape
-
-        image = im.open(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
-        image = image.convert('RGB').filter(ImageFilter.FIND_EDGES)
-        imageArray = np.array(image)
-        top = h
-        bottom = -1
-        left = w
-        right = -1
-        for i in range(3, h - 2):
-            for j in range(3, w - 2):
-                if np.sum(imageArray[i][j]) > 200:
-                    if i < top:
-                        top = i
-                    if i > bottom:
-                        bottom = i
-                    if j < left:
-                        left = j
-                    if j > right:
-                        right = j
-        top = max(1, top - 3)
-        left = max(1, left - 3)
-        bottom = min(h - 1, bottom + 3)
-        right = min(w - 1, right + 3)
-        # Visual for the inclusion rectangle
-        for i in range(1, h):
-            for j in range(1, w):
-                if (((top) == i or i == bottom) and ((left) <= j and j <= right)) or (((left) == j or right == j) and ((top) <= i and i <= bottom)):
-                   imageArray[i][j] = np.array([255, 0, 0]) 
-        imageArray[(top)][left] = np.array([0, 0, 255])
-        imageArray[(bottom)][right] = np.array([0, 255, 0])
-        im.fromarray(imageArray).save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edges.png"))
-        rect = (left, top, (right - left), (bottom - top))
-        cv2.grabCut(img,mask,rect,bgdModel,fgdModel,10,cv2.GC_INIT_WITH_RECT)
+        mask, img, h, w, name, bgdModel, fgdModel = admin(icon)
 
         bColour = str(request.form.get("bColour"))
         bColourArray = np.array([int(bColour[1:3], 16), int(bColour[3:5], 16), int(bColour[5:7], 16)])
@@ -286,3 +186,54 @@ def foreground():
 
     return render_template("foreground.html")
 
+
+
+def allowed_file(filename):
+        allowedExtensions = {'png', 'jpg', 'jpeg'}
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowedExtensions
+
+def admin(icon):
+    name = str(icon.filename)
+    icon.save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
+    img = cv2.imread(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    mask = np.zeros(img.shape[:2],np.uint8)
+
+    bgdModel = np.zeros((1,65),np.float64)
+    fgdModel = np.zeros((1,65),np.float64)
+    # Gets dimensions of image
+    h, w, c = img.shape
+
+    image = im.open(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], name))
+    image = image.convert('RGB').filter(ImageFilter.FIND_EDGES)
+    imageArray = np.array(image)
+    top = h
+    bottom = -1
+    left = w
+    right = -1
+    for i in range(3, h - 2):
+        for j in range(3, w - 2):
+            if np.sum(imageArray[i][j]) > 200:
+                if i < top:
+                    top = i
+                if i > bottom:
+                    bottom = i
+                if j < left:
+                    left = j
+                if j > right:
+                    right = j
+    top = max(1, top - 3)
+    left = max(1, left - 3)
+    bottom = min(h - 1, bottom + 3)
+    right = min(w - 1, right + 3)
+    # Visual for the inclusion rectangle
+    for i in range(1, h):
+        for j in range(1, w):
+            if (((top) == i or i == bottom) and ((left) <= j and j <= right)) or (((left) == j or right == j) and ((top) <= i and i <= bottom)):
+                imageArray[i][j] = np.array([255, 0, 0]) 
+    imageArray[(top)][left] = np.array([0, 0, 255])
+    imageArray[(bottom)][right] = np.array([0, 255, 0])
+    im.fromarray(imageArray).save(os.path.join(current_app.root_path, app.config['UPLOAD_FOLDER'], "edges.png"))
+    rect = (left, top, (right - left), (bottom - top))
+    mask, bgdModel, fgdModel = cv2.grabCut(img,mask,rect,bgdModel,fgdModel,10,cv2.GC_INIT_WITH_RECT)
+    return mask, img, h, w, name, bgdModel, fgdModel
